@@ -86,7 +86,16 @@ class With(object):
         query.demote_joins(existing_inner)
 
         parent = query.get_initial_alias()
-        query.join(QJoin(parent, self.name, self.name, on_clause, join_type))
+        query.join(
+            QJoin(
+                parent,
+                self.name,
+                self.name,
+                on_clause,
+                join_type,
+                model_or_queryset,
+            )
+        )
         return queryset
 
     def queryset(self):
