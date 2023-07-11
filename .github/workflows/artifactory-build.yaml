@@ -1,0 +1,36 @@
+name: artifactory build
+on:
+  push:
+    branches: [vndly]
+  pull_request:
+    branches: [vndly]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.PROD_TF_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROD_TF_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Get AWS secrets
+        uses: aws-actions/aws-secretsmanager-get-secrets@v1
+        with:
+          secret-ids: |
+            JF_ARTIFACT, wd-artifactory-github
+          parse-json-secrets: true
+      - name: Verify env variable is set after fetching secrets
+        run:
+          if [ -z ${JF_ARTIFACT_SECRET+x} ]; then echo "JF_ARTIFACT_SECRET is unset"; else echo "JF_ARTIFACT_SECRET is set to 'JF_ARTIFACT_SECRET'"; fi
+      - uses: jfrog/setup-jfrog-cli@v3
+        env:
+          #JF_URL: https://workday.jfrog.io
+          #JF_ACCESS_TOKEN: ${ JF_ARTIFACT_SECRET }
+          JF_ENV_1: ${ JF_ARTIFACT_SECRET }
+        with:
+          download-repository: jfrog-cli-remote
