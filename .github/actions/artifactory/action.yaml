@@ -1,0 +1,26 @@
+name: 'Connect via Workday Artifactory'
+description: 'Configures JFrog CLI to connect via Workday Artifactory'
+runs:
+  using: "composite"
+  steps:
+    - name: Get secrets by name and by ARN
+      uses: aws-actions/aws-secretsmanager-get-secrets@v1
+      with:
+        secret-ids: |
+          JF_ARTIFACT, arn:aws:secretsmanager:us-west-2:291931988280:secret:wd-artifactory-github-Q0OAGb
+        parse-json-secrets: true
+    - name: Verify env variable is set after fetching secrets
+      run:
+        if [ -z ${JF_ARTIFACT_SECRET+x} ]; then echo "JF_ARTIFACT_SECRET is unset"; else echo "JF_ARTIFACT_SECRET is set to 'JF_ARTIFACT_SECRET'"; fi
+    - uses: jfrog/setup-jfrog-cli@v3
+      env:
+        JF_ENV_1: ${{ JF_ARTIFACT_SECRET }}
+    - name: set build info
+      run: |
+        jf rt dl artifacts/
+        jf rt u aether artifacts/
+        jf rt bp
+    - name: ping update repo
+      run: |
+        # Ping the server
+        jf rt ping
