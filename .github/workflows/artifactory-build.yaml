@@ -1,17 +1,30 @@
-name: artifactory build
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
 on:
+  # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
-    branches: [vndly]
+    branches: [ "vndly" ]
   pull_request:
-    branches: [vndly]
+    branches: [ "vndly" ]
 
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  # This workflow contains a single job called "build"
   build:
-    runs-on: ubuntu-latest
+    # The type of runner that the job will run on
+    runs-on: self-hosted
 
+    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
-
+      
       - uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.PROD_TF_AWS_ACCESS_KEY_ID }}
@@ -22,15 +35,8 @@ jobs:
         uses: aws-actions/aws-secretsmanager-get-secrets@v1
         with:
           secret-ids: |
-            JF_ARTIFACT, wd-artifactory-github
-          parse-json-secrets: true
+            JF_SECRET,arn:aws:secretsmanager:us-west-2:291931988280:secret:wd-artifactory-github-Q0OAGb
+          
       - name: Verify env variable is set after fetching secrets
         run:
-          if [ -z ${JF_ARTIFACT_SECRET+x} ]; then echo "JF_ARTIFACT_SECRET is unset"; else echo "JF_ARTIFACT_SECRET is set to 'JF_ARTIFACT_SECRET'"; fi
-      - uses: jfrog/setup-jfrog-cli@v3
-        env:
-          #JF_URL: https://workday.jfrog.io
-          #JF_ACCESS_TOKEN: ${ JF_ARTIFACT_SECRET }
-          JF_ENV_1: ${ JF_ARTIFACT_SECRET }
-        with:
-          download-repository: jfrog-cli-remote
+          if [ -z ${{ env.JF_SECRET }} ]; then echo "JF_SECRET is unset"; else echo "JF_SECRET is set to 'JF_SECRET'"; fi
