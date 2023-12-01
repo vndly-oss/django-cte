@@ -99,6 +99,8 @@ class CTEDeleteQuery(DeleteQuery, CTEQuery):
 
 
 QUERY_TYPES = {
+    # copy over fix from https://github.com/dimagi/django-cte/pull/71/files
+    Query: CTEQuery,
     UpdateQuery: CTEUpdateQuery,
     DeleteQuery: CTEDeleteQuery,
 }
