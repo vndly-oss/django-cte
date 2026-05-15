@@ -1,11 +1,6 @@
-from __future__ import absolute_import
-from __future__ import unicode_literals
-
-import sys
-
 from django.db import connection
 
-from .models import KeyPair, Region, Order
+from .models import KeyPair, Region, Order, User
 
 is_initialized = False
 
@@ -16,13 +11,7 @@ def init_db():
         return
     is_initialized = True
 
-    # replace sys.stdout for prompt to delete database
-    old_stdout = sys.stdout
-    sys.stdout = sys.__stdout__
-    try:
-        connection.creation.create_test_db(verbosity=0)
-    finally:
-        sys.stdout = old_stdout
+    connection.creation.create_test_db(verbosity=0, autoclobber=True)
 
     setup_data()
 
@@ -32,6 +21,8 @@ def destroy_db():
 
 
 def setup_data():
+    admin = User.objects.create(name="admin")
+
     regions = {None: None}
     for name, parent in [
         ("sun", None),
@@ -74,7 +65,7 @@ def setup_data():
         ("proxima centauri b", 11),
         ("proxima centauri b", 12),
     ]:
-        order = Order(amount=amount, region=regions[region])
+        order = Order(amount=amount, region=regions[region], user=admin)
         order.save()
 
     for key, value, parent in [

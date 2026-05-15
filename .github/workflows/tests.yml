@@ -1,39 +1,54 @@
 name: django-cte tests
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Read Python versions from pyproject.toml
+      id: read-python-versions
+      # produces output like: python_versions=[ "3.9", "3.10", "3.11", "3.12" ]
+      run: >-
+        echo "python_versions=$(
+        grep -oP '(?<=Language :: Python :: )\d\.\d+' pyproject.toml
+        | jq --raw-input .
+        | jq --slurp .
+        | tr '\n' ' '
+        )" >> $GITHUB_OUTPUT
+    - name: Read Django versions from pyproject.toml
+      id: read-django-versions
+      # django_versions=[ "Django~=4.2.0", "Django~=5.1.0", "Django~=5.2.0" ]
+      run: >-
+        echo "django_versions=$(
+        grep -oP '(?<=Framework :: Django :: )\d+\.\d+' pyproject.toml
+        | sed -E 's/(.+)/Django~=\1.0/'
+        | jq --raw-input .
+        | jq --slurp .
+        | tr '\n' ' '
+        )" >> $GITHUB_OUTPUT
+    outputs:
+      python_versions: ${{ steps.read-python-versions.outputs.python_versions }}
+      django_versions: ${{ steps.read-django-versions.outputs.django_versions }}
+
   tests:
+    needs: [configure]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.7', '3.8', '3.9']
-        # Time to switch to pytest or nose2?
-        # nosetests is broken on 3.10
-        # AttributeError: module 'collections' has no attribute 'Callable'
-        # https://github.com/nose-devs/nose/issues/1099
-        django:
-        - 'Django>=2.2,<3.0'
-        - 'Django>=3.0,<3.1'
-        - 'Django>=3.1,<3.2'
-        - 'Django>=3.2,<3.3'
-        - 'Django>=4.0,<4.1'
-        experimental: [false]
-        include:
-        - python: '3.9'
-          django: 'https://github.com/django/django/archive/refs/heads/main.zip#egg=Django'
-          experimental: true
-          # NOTE this job will appear to pass even when it fails because of
-          # `continue-on-error: true`. Github Actions apparently does not
-          # have this feature, similar to Travis' allow-failure, yet.
-          # https://github.com/actions/toolkit/issues/399
+        python: ${{ fromJSON(needs.configure.outputs.python_versions) }}
+        django: ${{ fromJSON(needs.configure.outputs.django_versions) }}
         exclude:
-        - python: '3.7'
-          django: 'Django>=4.0,<4.1'
+        - {python: '3.9', django: 'Django~=5.1.0'}
+        - {python: '3.9', django: 'Django~=5.2.0'}
+    env:
+      allowed_python_failure: '3.14'
     services:
       postgres:
         image: postgres:latest
@@ -49,16 +64,16 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v6
       with:
+        version: '>=0.7'
         python-version: ${{ matrix.python }}
     - name: Setup
       run: |
-        python --version
-        pip install --upgrade pip wheel
-        pip install "${{ matrix.django }}" psycopg2-binary nose flake8
-    - name: Run tests
+        uv sync --locked --no-install-package=django
+        uv pip install "${{ matrix.django }}"
+    - name: Run tests on PostgreSQL
       env:
         DB_SETTINGS: >-
           {
@@ -69,7 +84,10 @@ jobs:
             "HOST":"localhost",
             "PORT":"5432"
           }
-      run: nosetests
-      continue-on-error: ${{ matrix.experimental }}
+      run: .venv/bin/pytest -v
+      continue-on-error: ${{ matrix.python == env.allowed_python_failure }}
+    - name: Run tests on SQLite
+      run: .venv/bin/pytest -v
+      continue-on-error: ${{ matrix.python == env.allowed_python_failure }}
     - name: Check style
-      run: flake8 django_cte/ tests/
+      run: .venv/bin/ruff check

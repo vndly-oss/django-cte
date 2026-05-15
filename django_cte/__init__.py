@@ -1,6 +1,4 @@
-from __future__ import absolute_import
-from __future__ import unicode_literals
+from .cte import CTE, with_cte, CTEManager, CTEQuerySet, With  # noqa
 
-from .cte import CTEManager, CTEQuerySet, With  # noqa
-
-__version__ = "1.1.5"
+__version__ = "3.0.0"
+__all__ = ["CTE", "with_cte"]

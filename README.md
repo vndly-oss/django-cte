@@ -1,6 +1,6 @@
-# Common Table Expressions (CTE) for Django
+# Common Table Expressions with Django
 
-[![Build Status](https://travis-ci.com/dimagi/django-cte.png)](https://travis-ci.com/dimagi/django-cte)
+[![Build Status](https://github.com/dimagi/django-cte/actions/workflows/tests.yml/badge.svg)](https://github.com/dimagi/django-cte/actions/workflows/tests.yml)
 [![PyPI version](https://badge.fury.io/py/django-cte.svg)](https://badge.fury.io/py/django-cte)
 
 ## Installation
@@ -9,144 +9,44 @@ pip install django-cte
 ```
 
 
-## Usage
+## Documentation
 
-### Simple Common Table Expressions
-
-Simple CTE queries can be constructed using `With`. A custom `CTEManager` is
-used to add the CTE to the final query.
-
-```py
-from django_cte import CTEManager, With
-
-class Order(Model):
-    objects = CTEManager()
-    id = AutoField(primary_key=True)
-    region = ForeignKey("Region", on_delete=CASCADE)
-    amount = IntegerField(default=0)
-
-
-cte = With(
-    Order.objects
-    .values("region_id")
-    .annotate(total=Sum("amount"))
-)
-
-orders = (
-    cte.join(Order, region=cte.col.region_id)
-    .with_cte(cte)
-    .annotate(region_total=cte.col.total)
-    .order_by("amount")
-)
-```
-
-Orders returned by this query will have a `region_total` attribute containing
-the sum of all order amounts in the order's region.
-
-
-### Simple Common Table Expressions with custom Manager and QuerySets
-
-If you need to use a custom `QuerySets` these should have a base class derived
-from `CTEQuerySet`.
-
-```py
-class PremiumOrdersQueySet(CTEQuerySet):
-    return self.filter(amount__gt=100)
-
-
-class PremiumOrders(Orders):
-    class Meta:
-        proxy = True
-
-    objects = PremiumOrdersQueySet.as_manager()
-```
-
-These can also be use with custom `Manager` or `Manager` and `QuerySet`
-
-```py
-class CustomManager(CTEManager):
-    def special_method(self):
-        return
-
-
-class AltOrders(Orders):
-    class Meta:
-        proxy = True
-
-    premium = CustomManager.from_queryset(PremiumOrdersQueySet)()
-    objects = CustomManager()
-```
-
-### Recursive Common Table Expressions
-
-Recursive CTE queries can be constructed using `With.recursive`.
-
-```py
-class Region(Model):
-    objects = CTEManager()
-    name = TextField(primary_key=True)
-    parent = ForeignKey("self", null=True, on_delete=CASCADE)
-
-def make_regions_cte(cte):
-    return Region.objects.filter(
-        # start with root nodes
-        parent__isnull=True
-    ).values(
-        "name",
-        path=F("name"),
-        depth=Value(0, output_field=IntegerField()),
-    ).union(
-        # recursive union: get descendants
-        cte.join(Region, parent=cte.col.name).values(
-            "name",
-            path=Concat(
-                cte.col.path, Value("\x01"), F("name"),
-                output_field=TextField(),
-            ),
-            depth=cte.col.depth + Value(1, output_field=IntegerField()),
-        ),
-        all=True,
-    )
-
-cte = With.recursive(make_regions_cte)
-
-regions = (
-    cte.join(Region, name=cte.col.name)
-    .with_cte(cte)
-    .annotate(
-        path=cte.col.path,
-        depth=cte.col.depth,
-    )
-    .order_by("path")
-)
-```
-
-Regions returned by this query will have `path` and `depth` attributes. The
-results will be ordered by `path` (hierarchically by region name). In this case
-`path` is a `'\x01'`-delimited string of region names starting with the root
-region.
-
-See [tests](./tests) for more advanced examples.
+The [django-cte documentation](https://dimagi.github.io/django-cte/) shows how
+to use Common Table Expressions with the Django ORM.
 
 
 ## Running tests
 
 ```
 cd django-cte
-mkvirtualenv cte  # or however you choose to setup your environment
-pip install django nose flake8
+uv sync
 
-nosetests
-flake8 --config=setup.cfg
+pytest
+ruff check
+
+# To run tests against postgres
+psql -U username -h localhost -p 5432 -c 'create database django_cte;'
+export PG_DB_SETTINGS='{
+    "ENGINE":"django.db.backends.postgresql_psycopg2",
+    "NAME":"django_cte",
+    "USER":"username",
+    "PASSWORD":"password",
+    "HOST":"localhost",
+    "PORT":"5432"}'
+
+# WARNING pytest will delete the test_django_cte database if it exists!
+DB_SETTINGS="$PG_DB_SETTINGS" pytest
 ```
 
-## Uploading to PyPI
+All feature and bug contributions are expected to be covered by tests.
 
-Package and upload the generated files.
 
-```
-pip install -r pkg-requires.txt
+## Publishing a new verison to PyPI
 
-python setup.py sdist bdist_wheel
-twine upload dist/*
-```
+Push a new tag to Github using the format vX.Y.Z where X.Y.Z matches the version
+in [`__init__.py`](django_cte/__init__.py).
+
+A new version is published to https://test.pypi.org/p/django-cte on every
+push to the *main* branch.
+
+Publishing is automated with [Github Actions](.github/workflows/pypi.yml).
